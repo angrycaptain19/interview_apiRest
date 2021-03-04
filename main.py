@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 app = FastAPI()
 
-lista_db = list()
+lista_db = []
 
 class Person(BaseModel):
     name: str
