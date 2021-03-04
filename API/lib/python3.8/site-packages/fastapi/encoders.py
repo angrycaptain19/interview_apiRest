@@ -98,10 +98,7 @@ def jsonable_encoder(
                 encoded_dict[encoded_key] = encoded_value
         return encoded_dict
     if isinstance(obj, (list, set, frozenset, GeneratorType, tuple)):
-        encoded_list = []
-        for item in obj:
-            encoded_list.append(
-                jsonable_encoder(
+        return [jsonable_encoder(
                     item,
                     include=include,
                     exclude=exclude,
@@ -111,9 +108,7 @@ def jsonable_encoder(
                     exclude_none=exclude_none,
                     custom_encoder=custom_encoder,
                     sqlalchemy_safe=sqlalchemy_safe,
-                )
-            )
-        return encoded_list
+                ) for item in obj]
 
     if custom_encoder:
         if type(obj) in custom_encoder:

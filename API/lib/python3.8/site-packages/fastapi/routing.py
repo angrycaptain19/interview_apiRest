@@ -104,37 +104,36 @@ async def serialize_response(
     exclude_none: bool = False,
     is_coroutine: bool = True,
 ) -> Any:
-    if field:
-        errors = []
-        response_content = _prepare_response_content(
-            response_content,
-            exclude_unset=exclude_unset,
-            exclude_defaults=exclude_defaults,
-            exclude_none=exclude_none,
-        )
-        if is_coroutine:
-            value, errors_ = field.validate(response_content, {}, loc=("response",))
-        else:
-            value, errors_ = await run_in_threadpool(
-                field.validate, response_content, {}, loc=("response",)
-            )
-        if isinstance(errors_, ErrorWrapper):
-            errors.append(errors_)
-        elif isinstance(errors_, list):
-            errors.extend(errors_)
-        if errors:
-            raise ValidationError(errors, field.type_)
-        return jsonable_encoder(
-            value,
-            include=include,
-            exclude=exclude,
-            by_alias=by_alias,
-            exclude_unset=exclude_unset,
-            exclude_defaults=exclude_defaults,
-            exclude_none=exclude_none,
-        )
-    else:
+    if not field:
         return jsonable_encoder(response_content)
+    errors = []
+    response_content = _prepare_response_content(
+        response_content,
+        exclude_unset=exclude_unset,
+        exclude_defaults=exclude_defaults,
+        exclude_none=exclude_none,
+    )
+    if is_coroutine:
+        value, errors_ = field.validate(response_content, {}, loc=("response",))
+    else:
+        value, errors_ = await run_in_threadpool(
+            field.validate, response_content, {}, loc=("response",)
+        )
+    if isinstance(errors_, ErrorWrapper):
+        errors.append(errors_)
+    elif isinstance(errors_, list):
+        errors.extend(errors_)
+    if errors:
+        raise ValidationError(errors, field.type_)
+    return jsonable_encoder(
+        value,
+        include=include,
+        exclude=exclude,
+        by_alias=by_alias,
+        exclude_unset=exclude_unset,
+        exclude_defaults=exclude_defaults,
+        exclude_none=exclude_none,
+    )
 
 
 async def run_endpoint_function(
@@ -197,35 +196,34 @@ def get_request_handler(
         values, errors, background_tasks, sub_response, _ = solved_result
         if errors:
             raise RequestValidationError(errors, body=body)
-        else:
-            raw_response = await run_endpoint_function(
-                dependant=dependant, values=values, is_coroutine=is_coroutine
-            )
+        raw_response = await run_endpoint_function(
+            dependant=dependant, values=values, is_coroutine=is_coroutine
+        )
 
-            if isinstance(raw_response, Response):
-                if raw_response.background is None:
-                    raw_response.background = background_tasks
-                return raw_response
-            response_data = await serialize_response(
-                field=response_field,
-                response_content=raw_response,
-                include=response_model_include,
-                exclude=response_model_exclude,
-                by_alias=response_model_by_alias,
-                exclude_unset=response_model_exclude_unset,
-                exclude_defaults=response_model_exclude_defaults,
-                exclude_none=response_model_exclude_none,
-                is_coroutine=is_coroutine,
-            )
-            response = actual_response_class(
-                content=response_data,
-                status_code=status_code,
-                background=background_tasks,  # type: ignore # in Starlette
-            )
-            response.headers.raw.extend(sub_response.headers.raw)
-            if sub_response.status_code:
-                response.status_code = sub_response.status_code
-            return response
+        if isinstance(raw_response, Response):
+            if raw_response.background is None:
+                raw_response.background = background_tasks
+            return raw_response
+        response_data = await serialize_response(
+            field=response_field,
+            response_content=raw_response,
+            include=response_model_include,
+            exclude=response_model_exclude,
+            by_alias=response_model_by_alias,
+            exclude_unset=response_model_exclude_unset,
+            exclude_defaults=response_model_exclude_defaults,
+            exclude_none=response_model_exclude_none,
+            is_coroutine=is_coroutine,
+        )
+        response = actual_response_class(
+            content=response_data,
+            status_code=status_code,
+            background=background_tasks,  # type: ignore # in Starlette
+        )
+        response.headers.raw.extend(sub_response.headers.raw)
+        if sub_response.status_code:
+            response.status_code = sub_response.status_code
+        return response
 
     return app
 
@@ -311,7 +309,7 @@ class APIRoute(routing.Route):
         self.path_regex, self.path_format, self.param_convertors = compile_path(path)
         if methods is None:
             methods = ["GET"]
-        self.methods: Set[str] = set([method.upper() for method in methods])
+        self.methods: Set[str] = {method.upper() for method in methods}
         self.unique_id = generate_operation_id_for_path(
             name=self.name, path=self.path_format, method=list(methods)[0]
         )
@@ -339,10 +337,7 @@ class APIRoute(routing.Route):
             self.secure_cloned_response_field = None
         self.status_code = status_code
         self.tags = tags or []
-        if dependencies:
-            self.dependencies = list(dependencies)
-        else:
-            self.dependencies = []
+        self.dependencies = list(dependencies) if dependencies else []
         self.summary = summary
         self.description = description or inspect.cleandoc(self.endpoint.__doc__ or "")
         # if a "form feed" character (page break) is found in the description text,
